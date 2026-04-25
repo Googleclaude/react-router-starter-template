@@ -41,7 +41,16 @@ wrangler secret put ANTHROPIC_API_KEY
 
 ```bash
 npm run dev
-# http://localhost:5173
+# http://localhost:5173 (Vite + React Router HMR)
+```
+
+> Em `npm run dev` o app roda no Node, **sem** D1 nem `ANTHROPIC_API_KEY`.
+> Para testar o fluxo completo (D1 local + secret) localmente, use:
+
+```bash
+npm run preview
+# Faz o build e roda `wrangler dev` com bindings reais (D1 local + .dev.vars).
+# http://localhost:8787
 ```
 
 ## Deploy

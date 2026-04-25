@@ -4,7 +4,8 @@
     "**/.server/**/*",
     "**/.client/**/*",
     ".react-router/types/**/*",
-    "worker-configuration.d.ts"
+    "worker-configuration.d.ts",
+    "worker-env.d.ts"
   ],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
