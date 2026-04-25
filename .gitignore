@@ -1,0 +1,12 @@
+node_modules
+.cache
+.wrangler
+.env
+.env.*
+!.env.example
+build
+.react-router
+worker-configuration.d.ts
+.dev.vars
+*.log
+.DS_Store
