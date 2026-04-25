@@ -14,13 +14,20 @@ declare module "react-router" {
   }
 }
 
-const handleRequest = createRequestHandler(
-  build as unknown as ServerBuild,
-  "production",
-);
+// Build the handler once per isolate. Mode is sticky for the worker's
+// lifetime — set NODE_ENV=production in deploy vars; leave it unset in
+// `wrangler dev` so React Router renders dev-mode error pages with stack
+// traces.
+function buildHandler(env: Env) {
+  const mode = env.NODE_ENV === "production" ? "production" : "development";
+  return createRequestHandler(build as unknown as ServerBuild, mode);
+}
+
+let handleRequest: ReturnType<typeof buildHandler> | undefined;
 
 export default {
   async fetch(request, env, ctx) {
+    if (!handleRequest) handleRequest = buildHandler(env);
     return handleRequest(request, { cloudflare: { env, ctx } });
   },
 } satisfies ExportedHandler<Env>;

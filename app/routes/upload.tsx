@@ -50,9 +50,18 @@ export async function action({ request, context }: Route.ActionArgs) {
     });
     return redirect(`/decisao/${id}`);
   } catch (err) {
+    // Log full detail server-side; never leak provider/SDK messages to the
+    // browser. Surface a correlation id so the user can report the failure.
+    const correlationId = crypto.randomUUID();
+    console.error("[upload] falha ao processar PDF", {
+      correlationId,
+      fileName: file.name,
+      fileSize: file.size,
+      error: err,
+    });
     return {
       ok: false as const,
-      error: `Falha ao processar o PDF: ${(err as Error).message}`,
+      error: `Falha ao processar o PDF. Tente novamente. Se persistir, informe o código: ${correlationId}.`,
     };
   }
 }

@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DecisaoExtracted } from "./types";
 
@@ -138,15 +139,9 @@ export async function extractDecisaoFromPdf(
 }
 
 export async function fileToBase64(file: File): Promise<string> {
+  // nodejs_compat is enabled in wrangler.jsonc, so node:buffer is available
+  // in the Worker runtime. Buffer's native base64 encoder is dramatically
+  // faster than the JS chunked-btoa approach for files in the megabyte range.
   const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(
-      null,
-      Array.from(bytes.subarray(i, i + chunkSize)),
-    );
-  }
-  return btoa(binary);
+  return Buffer.from(buffer).toString("base64");
 }

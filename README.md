@@ -39,19 +39,20 @@ wrangler secret put ANTHROPIC_API_KEY
 
 ## Desenvolvimento
 
-```bash
-npm run dev
-# http://localhost:5173 (Vite + React Router HMR)
-```
-
-> Em `npm run dev` o app roda no Node, **sem** D1 nem `ANTHROPIC_API_KEY`.
-> Para testar o fluxo completo (D1 local + secret) localmente, use:
+**Use `npm run preview` no dia-a-dia** — é o único modo com D1 + secrets:
 
 ```bash
 npm run preview
-# Faz o build e roda `wrangler dev` com bindings reais (D1 local + .dev.vars).
+# Faz o build e roda `wrangler dev` com bindings reais
+# (D1 local em .wrangler/state/, secrets de .dev.vars).
 # http://localhost:8787
 ```
+
+`npm run dev` (Vite + React Router HMR) é útil **apenas** para iterar em
+componentes que não tocam o banco — ele não tem `context.cloudflare`,
+então loaders/actions que acessam `env.DB` ou `env.ANTHROPIC_API_KEY`
+vão lançar erro. Como todas as rotas atuais usam o D1, a recomendação é
+ficar no `npm run preview`.
 
 ## Deploy
 
