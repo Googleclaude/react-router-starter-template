@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "decisoes-stf",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./build/client"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "decisoes-db",
+      "database_id": "REPLACE_WITH_YOUR_D1_DB_ID",
+      "migrations_dir": "./migrations"
+    }
+  ]
+  // ANTHROPIC_API_KEY deve ser configurado como secret:
+  //   wrangler secret put ANTHROPIC_API_KEY
+}
