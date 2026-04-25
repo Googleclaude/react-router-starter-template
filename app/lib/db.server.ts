@@ -1,15 +1,20 @@
-import type { Decisao, DecisaoExtracted } from "./types";
+import type { Decisao, DecisaoExtracted, DecisaoListItem } from "./types";
 
-export async function listDecisoes(db: D1Database): Promise<Decisao[]> {
+export async function listDecisoes(
+  db: D1Database,
+): Promise<DecisaoListItem[]> {
+  // List view doesn't need ementa/resumo/tese/raw_text — keep payload small
+  // and let the query plan use idx_decisoes_data_decisao (no expression around
+  // the column; SQLite places NULLs last on DESC by default).
   const { results } = await db
     .prepare(
       `SELECT id, numero_processo, classe_processual, turma, ministro_relator,
               data_decisao, data_publicacao, resultado, valor_nominal,
-              ementa, resumo, tese_juridica, pdf_filename, raw_text, created_at
+              pdf_filename, created_at
          FROM decisoes
-        ORDER BY COALESCE(data_decisao, '0000-00-00') DESC, id DESC`,
+        ORDER BY data_decisao DESC, id DESC`,
     )
-    .all<Decisao>();
+    .all<DecisaoListItem>();
   return results;
 }
 

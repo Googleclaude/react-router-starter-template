@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/_index";
 import { listDecisoes } from "~/lib/db.server";
+import { formatDate } from "~/lib/format";
 
 export const meta: Route.MetaFunction = () => [
   { title: "Decisões STF" },
@@ -13,13 +14,6 @@ export const meta: Route.MetaFunction = () => [
 export async function loader({ context }: Route.LoaderArgs) {
   const decisoes = await listDecisoes(context.cloudflare.env.DB);
   return { decisoes };
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return iso;
-  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
 export default function Index({ loaderData }: Route.ComponentProps) {

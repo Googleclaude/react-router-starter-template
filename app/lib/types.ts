@@ -16,6 +16,21 @@ export type Decisao = {
   created_at: string;
 };
 
+export type DecisaoListItem = Pick<
+  Decisao,
+  | "id"
+  | "numero_processo"
+  | "classe_processual"
+  | "turma"
+  | "ministro_relator"
+  | "data_decisao"
+  | "data_publicacao"
+  | "resultado"
+  | "valor_nominal"
+  | "pdf_filename"
+  | "created_at"
+>;
+
 export type DecisaoExtracted = {
   numero_processo: string | null;
   classe_processual: string | null;

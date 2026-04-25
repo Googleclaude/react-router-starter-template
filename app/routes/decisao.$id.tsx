@@ -1,6 +1,7 @@
 import { Form, Link, redirect } from "react-router";
 import type { Route } from "./+types/decisao.$id";
 import { deleteDecisao, getDecisao } from "~/lib/db.server";
+import { formatDate } from "~/lib/format";
 
 export const meta: Route.MetaFunction = ({ data }) => {
   const numero =
@@ -31,13 +32,6 @@ export async function action({ context, params, request }: Route.ActionArgs) {
     return redirect("/");
   }
   return null;
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return iso;
-  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
 function Field({

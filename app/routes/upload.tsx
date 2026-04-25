@@ -3,9 +3,17 @@ import type { Route } from "./+types/upload";
 import { extractDecisaoFromPdf, fileToBase64 } from "~/lib/claude.server";
 import { insertDecisao } from "~/lib/db.server";
 
+// Limite alinhado ao que cabe confortavelmente no Worker (memória/CPU) e ao
+// custo da chamada do modelo. STF normalmente emite PDFs bem abaixo disso.
+const MAX_PDF_BYTES = 15 * 1024 * 1024; // 15 MB
+
 export const meta: Route.MetaFunction = () => [
   { title: "Nova decisão · Decisões STF" },
 ];
+
+function formatBytes(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export async function action({ request, context }: Route.ActionArgs) {
   const env = context.cloudflare.env;
@@ -25,6 +33,12 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
   if (file.type && file.type !== "application/pdf") {
     return { ok: false as const, error: "O arquivo deve ser um PDF." };
+  }
+  if (file.size > MAX_PDF_BYTES) {
+    return {
+      ok: false as const,
+      error: `PDF muito grande (${formatBytes(file.size)}). Tamanho máximo: ${formatBytes(MAX_PDF_BYTES)}.`,
+    };
   }
 
   try {
@@ -82,6 +96,9 @@ export default function Upload({ actionData }: Route.ComponentProps) {
             disabled={isSubmitting}
             className="mt-2 block w-full cursor-pointer rounded-md border border-slate-300 bg-slate-50 p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
           />
+          <p className="mt-1 text-xs text-slate-500">
+            Tamanho máximo: 15&nbsp;MB.
+          </p>
         </div>
 
         {actionData && actionData.ok === false ? (
