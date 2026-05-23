@@ -7,6 +7,21 @@ import { insertDecisao } from "~/lib/db.server";
 // custo da chamada do modelo. STF normalmente emite PDFs bem abaixo disso.
 const MAX_PDF_BYTES = 15 * 1024 * 1024; // 15 MB
 
+// Header de um PDF real: "%PDF-" (ASCII 0x25 50 44 46 2D). Validar contra o
+// MIME type do form é trivial de spoofar — checar os primeiros bytes evita
+// gastar tokens da Anthropic com arquivos disfarçados.
+function hasPdfMagicBytes(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 5) return false;
+  const head = new Uint8Array(buffer, 0, 5);
+  return (
+    head[0] === 0x25 && // %
+    head[1] === 0x50 && // P
+    head[2] === 0x44 && // D
+    head[3] === 0x46 && // F
+    head[4] === 0x2d //   -
+  );
+}
+
 export const meta: Route.MetaFunction = () => [
   { title: "Nova decisão · Decisões STF" },
 ];
@@ -38,6 +53,17 @@ export async function action({ request, context }: Route.ActionArgs) {
     return {
       ok: false as const,
       error: `PDF muito grande (${formatBytes(file.size)}). Tamanho máximo: ${formatBytes(MAX_PDF_BYTES)}.`,
+    };
+  }
+
+  // Read once: validar magic bytes + reusar o buffer para base64. Evita
+  // segundo arrayBuffer() em fileToBase64 (que faria streaming duplo).
+  const buffer = await file.arrayBuffer();
+  if (!hasPdfMagicBytes(buffer)) {
+    return {
+      ok: false as const,
+      error:
+        "Arquivo não é um PDF válido (header ausente). Envie um PDF real, não renomeie outros formatos.",
     };
   }
 
@@ -83,6 +109,13 @@ export default function Upload({ actionData }: Route.ComponentProps) {
         Envie o PDF da decisão. O sistema extrairá automaticamente os dados, a
         ementa e gerará resumo e tese jurídica.
       </p>
+
+      <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <strong>Aviso de privacidade:</strong> o PDF enviado é processado pela
+        API da Anthropic (Claude) e armazenado em banco de dados na Cloudflare.
+        Não envie decisões em <em>segredo de justiça</em> ou outros documentos
+        sigilosos.
+      </div>
 
       <Form
         method="post"
