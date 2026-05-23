@@ -14,10 +14,10 @@ declare module "react-router" {
   }
 }
 
-// Build the handler once per isolate. Mode is sticky for the worker's
-// lifetime — set NODE_ENV=production in deploy vars; leave it unset in
-// `wrangler dev` so React Router renders dev-mode error pages with stack
-// traces.
+// ---------------------------------------------------------------------------
+// Build the React Router handler once per isolate. Mode is sticky for the
+// worker's lifetime — set NODE_ENV=production in deploy vars; leave it unset
+// in `wrangler dev` so React Router renders dev-mode error pages.
 function buildHandler(env: Env) {
   const mode = env.NODE_ENV === "production" ? "production" : "development";
   return createRequestHandler(build as unknown as ServerBuild, mode);
@@ -25,9 +25,9 @@ function buildHandler(env: Env) {
 
 let handleRequest: ReturnType<typeof buildHandler> | undefined;
 
-// Constant-time string compare. Avoids leaking the password length and per-
-// character match progress through response timing. xor each char, OR into
-// `diff`; only return after the full loop.
+// ---------------------------------------------------------------------------
+// Basic Auth
+
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -38,17 +38,16 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 function unauthorized(): Response {
-  return new Response("401 Não autorizado", {
-    status: 401,
-    headers: {
-      // Triggers the browser's native login prompt. `charset="UTF-8"` lets
-      // browsers decode non-ASCII passwords correctly.
-      "WWW-Authenticate": 'Basic realm="Decisões STF", charset="UTF-8"',
-      "Content-Type": "text/plain; charset=utf-8",
-      // Don't let intermediate caches store the 401.
-      "Cache-Control": "no-store",
-    },
-  });
+  return withSecurityHeaders(
+    new Response("401 Não autorizado", {
+      status: 401,
+      headers: {
+        "WWW-Authenticate": 'Basic realm="Decisões STF", charset="UTF-8"',
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    }),
+  );
 }
 
 function checkBasicAuth(request: Request, expected: string): boolean {
@@ -60,32 +59,102 @@ function checkBasicAuth(request: Request, expected: string): boolean {
   } catch {
     return false;
   }
-  // Basic auth format is "username:password". Username is ignored — anything
-  // works in the browser prompt; only the password must match.
   const idx = decoded.indexOf(":");
   if (idx === -1) return false;
   const password = decoded.slice(idx + 1);
   return safeEqual(password, expected);
 }
 
+// ---------------------------------------------------------------------------
+// CSRF (Sec-Fetch-Site)
+//
+// Basic Auth credentials are auto-attached by the browser on every request to
+// the protected origin — including cross-origin POSTs from a malicious page.
+// We can't use SameSite cookies (no cookies), so use `Sec-Fetch-Site` (sent
+// by every modern browser) to reject cross-site state-changing requests.
+//
+// Programmatic clients (curl, scripts) don't send Sec-Fetch-Site at all;
+// allow those through — the Basic Auth check above is their security
+// boundary. Browsers (the only CSRF vector that matters) DO send it, so
+// drive-by POSTs from foreign tabs are blocked.
+const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function csrfCheck(request: Request): boolean {
+  if (!STATE_CHANGING.has(request.method)) return true;
+  const site = request.headers.get("Sec-Fetch-Site");
+  // Block only when browser explicitly reports cross-site. Missing header,
+  // 'same-origin', 'same-site', and 'none' are all OK.
+  return site !== "cross-site";
+}
+
+function csrfBlocked(): Response {
+  return withSecurityHeaders(
+    new Response("403 Origem não autorizada (CSRF)", {
+      status: 403,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    }),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Security response headers (defense in depth)
+
+const SECURITY_HEADERS: Record<string, string> = {
+  // HTTPS only on the Cloudflare edge; once a browser sees this it pins HTTPS
+  // for the next year. Don't include subdomains — the workers.dev parent zone
+  // would inherit.
+  "Strict-Transport-Security": "max-age=31536000",
+  // Block MIME sniffing — browsers must use the Content-Type we set.
+  "X-Content-Type-Options": "nosniff",
+  // No framing at all (clickjacking).
+  "X-Frame-Options": "DENY",
+  // On cross-origin nav, only send the origin (not full URL) as referrer.
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  // Drop powerful features we don't need.
+  "Permissions-Policy":
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
+};
+
+function withSecurityHeaders(response: Response): Response {
+  // Clone headers — some upstream responses have immutable Headers. Body is a
+  // ReadableStream and is preserved through the new Response (no buffering).
+  const headers = new Headers(response.headers);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+    if (!headers.has(k)) headers.set(k, v);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+// ---------------------------------------------------------------------------
+
 export default {
   async fetch(request, env, ctx) {
-    // Fail closed: if APP_PASSWORD isn't set as a secret, return 503 instead
-    // of serving the app unprotected. Set via wrangler secret put or in the
-    // Cloudflare dashboard (Workers → Settings → Variables and Secrets).
+    // Fail closed when the gate secret isn't configured.
     if (!env.APP_PASSWORD) {
-      return new Response(
-        "APP_PASSWORD não configurado. Defina como secret no painel Cloudflare antes de acessar o app.",
-        {
-          status: 503,
-          headers: { "Content-Type": "text/plain; charset=utf-8" },
-        },
+      return withSecurityHeaders(
+        new Response(
+          "APP_PASSWORD não configurado. Defina como secret no painel Cloudflare antes de acessar o app.",
+          {
+            status: 503,
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          },
+        ),
       );
     }
     if (!checkBasicAuth(request, env.APP_PASSWORD)) {
       return unauthorized();
     }
+    if (!csrfCheck(request)) {
+      return csrfBlocked();
+    }
     if (!handleRequest) handleRequest = buildHandler(env);
-    return handleRequest(request, { cloudflare: { env, ctx } });
+    const response = await handleRequest(request, {
+      cloudflare: { env, ctx },
+    });
+    return withSecurityHeaders(response);
   },
 } satisfies ExportedHandler<Env>;

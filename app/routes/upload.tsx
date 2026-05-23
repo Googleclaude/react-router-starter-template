@@ -2,6 +2,7 @@ import { Form, Link, redirect, useNavigation } from "react-router";
 import type { Route } from "./+types/upload";
 import { extractDecisaoFromPdf, fileToBase64 } from "~/lib/claude.server";
 import { insertDecisao } from "~/lib/db.server";
+import { sanitizeFilename } from "~/lib/sanitize";
 
 // Limite alinhado ao que cabe confortavelmente no Worker (memória/CPU) e ao
 // custo da chamada do modelo. STF normalmente emite PDFs bem abaixo disso.
@@ -56,8 +57,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     };
   }
 
-  // Read once: validar magic bytes + reusar o buffer para base64. Evita
-  // segundo arrayBuffer() em fileToBase64 (que faria streaming duplo).
+  // Read once: valida magic bytes + reusa o buffer para base64. Evita segundo
+  // arrayBuffer() em fileToBase64 (que faria streaming duplo).
   const buffer = await file.arrayBuffer();
   if (!hasPdfMagicBytes(buffer)) {
     return {
@@ -67,21 +68,23 @@ export async function action({ request, context }: Route.ActionArgs) {
     };
   }
 
+  // Sanitiza ANTES de logar / persistir — nomes de arquivo podem conter CPF,
+  // CNPJ, nome de pessoa física, etc.
+  const safeFilename = sanitizeFilename(file.name);
+
   try {
     const base64 = await fileToBase64(file);
     const extracted = await extractDecisaoFromPdf(apiKey, base64);
     const id = await insertDecisao(env.DB, {
       ...extracted,
-      pdf_filename: file.name,
+      pdf_filename: safeFilename,
     });
     return redirect(`/decisao/${id}`);
   } catch (err) {
-    // Log full detail server-side; never leak provider/SDK messages to the
-    // browser. Surface a correlation id so the user can report the failure.
     const correlationId = crypto.randomUUID();
     console.error("[upload] falha ao processar PDF", {
       correlationId,
-      fileName: file.name,
+      fileName: safeFilename, // log o nome saneado, não o original
       fileSize: file.size,
       error: err,
     });
@@ -114,7 +117,7 @@ export default function Upload({ actionData }: Route.ComponentProps) {
         <strong>Aviso de privacidade:</strong> o PDF enviado é processado pela
         API da Anthropic (Claude) e armazenado em banco de dados na Cloudflare.
         Não envie decisões em <em>segredo de justiça</em> ou outros documentos
-        sigilosos.
+        sigilosos. CPF/CNPJ no nome do arquivo são removidos automaticamente.
       </div>
 
       <Form
