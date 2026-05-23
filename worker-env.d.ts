@@ -4,6 +4,11 @@
 // sees them via the `Env` interface inside loaders/actions.
 interface Env {
   ANTHROPIC_API_KEY: string;
+  // Shared password for HTTP Basic Auth gating the whole app. Set via
+  // `wrangler secret put APP_PASSWORD` or the Cloudflare dashboard.
+  // Optional in TypeScript so dev/preview without the secret type-checks;
+  // the worker fails closed at runtime if it's missing.
+  APP_PASSWORD?: string;
   // Optional. Set to "production" in `[env.production.vars]` of wrangler.jsonc
   // (or via `wrangler deploy --var NODE_ENV:production`) so the React Router
   // request handler runs in production mode in deploys; left unset (or any
