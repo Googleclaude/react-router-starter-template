@@ -15,7 +15,7 @@
     {
       "binding": "DB",
       "database_name": "decisoes-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DB_ID",
+      "database_id": "a4fd5346-2bab-4b73-8d09-ea513f4aa11a",
       "migrations_dir": "./migrations"
     }
   ]
