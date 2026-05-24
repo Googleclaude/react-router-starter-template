@@ -12,7 +12,6 @@ export type Decisao = {
   resumo: string | null;
   tese_juridica: string | null;
   pdf_filename: string | null;
-  raw_text: string | null;
   created_at: string;
 };
 

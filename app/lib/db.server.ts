@@ -3,9 +3,9 @@ import type { Decisao, DecisaoExtracted, DecisaoListItem } from "./types";
 export async function listDecisoes(
   db: D1Database,
 ): Promise<DecisaoListItem[]> {
-  // List view doesn't need ementa/resumo/tese/raw_text — keep payload small
-  // and let the query plan use idx_decisoes_data_decisao (no expression around
-  // the column; SQLite places NULLs last on DESC by default).
+  // List view doesn't need ementa/resumo/tese — keep payload small and let
+  // the query plan use idx_decisoes_data_decisao (no expression around the
+  // column; SQLite places NULLs last on DESC by default).
   const { results } = await db
     .prepare(
       `SELECT id, numero_processo, classe_processual, turma, ministro_relator,
@@ -31,15 +31,15 @@ export async function getDecisao(
 
 export async function insertDecisao(
   db: D1Database,
-  data: DecisaoExtracted & { pdf_filename: string | null; raw_text?: string | null },
+  data: DecisaoExtracted & { pdf_filename: string | null },
 ): Promise<number> {
   const result = await db
     .prepare(
       `INSERT INTO decisoes
         (numero_processo, classe_processual, turma, ministro_relator,
          data_decisao, data_publicacao, resultado, valor_nominal,
-         ementa, resumo, tese_juridica, pdf_filename, raw_text)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ementa, resumo, tese_juridica, pdf_filename)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       data.numero_processo,
@@ -54,7 +54,6 @@ export async function insertDecisao(
       data.resumo,
       data.tese_juridica,
       data.pdf_filename,
-      data.raw_text ?? null,
     )
     .run();
 
