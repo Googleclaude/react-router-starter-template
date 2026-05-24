@@ -192,6 +192,13 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-Permitted-Cross-Domain-Policies": "none",
   // Belt-and-suspenders against MIME-confusion XSS for downloaded files.
   "X-Download-Options": "noopen",
+  // Don't let authenticated content leak through shared caches / browser
+  // disk cache after the user logs out. 'private' blocks intermediate
+  // proxies; 'no-store' blocks the browser's disk cache (memory cache for
+  // the current session is fine). Upstream responses that set their own
+  // Cache-Control (static assets via the ASSETS binding) keep theirs — the
+  // `!has` check in withSecurityHeaders preserves them.
+  "Cache-Control": "private, no-store",
 };
 
 // MIME types whose Content-Type we want to ensure carries `charset=utf-8`.

@@ -33,6 +33,13 @@ export default function Index({ loaderData }: Route.ComponentProps) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="/admin/export"
+            className="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+            title="Baixa todas as decisões (incluindo removidas) em JSON"
+          >
+            Backup
+          </a>
           <Link
             to="/lixeira"
             className="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
