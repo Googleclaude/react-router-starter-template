@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { Route } from "./+types/upload-lote";
-import { MAX_PDF_BYTES, type ProcessResult } from "~/lib/upload.shared";
+import { PrivacyNotice } from "~/components/privacy-notice";
+import {
+  bytesToMB,
+  MAX_PDF_BYTES,
+  type ProcessResult,
+} from "~/lib/upload.shared";
 
 export const meta: Route.MetaFunction = () => [
   { title: "Upload em lote · Decisões STF" },
@@ -19,8 +24,17 @@ type Item = {
 const DEFAULT_CONCURRENCY = 3;
 const MAX_CONCURRENCY = 10;
 
-function fmtBytes(n: number): string {
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+// Mirror the server-side validation in processUploadedPdf so the user gets
+// fast feedback before any network call. Server still re-validates — this is
+// UX only.
+function validatePickedFile(file: File): string | undefined {
+  if (file.size > MAX_PDF_BYTES) {
+    return `Arquivo maior que ${bytesToMB(MAX_PDF_BYTES)}.`;
+  }
+  if (file.type && file.type !== "application/pdf") {
+    return "Não é PDF.";
+  }
+  return undefined;
 }
 
 async function uploadOne(file: File): Promise<ProcessResult> {
@@ -59,22 +73,15 @@ export default function UploadLote(_: Route.ComponentProps) {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       if (running) return;
       const picked = Array.from(e.target.files ?? []);
-      const next: Item[] = picked.map((file, i) => ({
-        key: `${Date.now()}-${i}-${file.name}`,
-        file,
-        status:
-          file.size > MAX_PDF_BYTES
-            ? "error"
-            : file.type && file.type !== "application/pdf"
-            ? "error"
-            : "pending",
-        error:
-          file.size > MAX_PDF_BYTES
-            ? `Arquivo maior que ${fmtBytes(MAX_PDF_BYTES)}.`
-            : file.type && file.type !== "application/pdf"
-            ? "Não é PDF."
-            : undefined,
-      }));
+      const next: Item[] = picked.map((file, i) => {
+        const error = validatePickedFile(file);
+        return {
+          key: `${Date.now()}-${i}-${file.name}`,
+          file,
+          status: error ? "error" : "pending",
+          error,
+        };
+      });
       setItems(next);
       e.target.value = "";
     },
@@ -148,13 +155,7 @@ export default function UploadLote(_: Route.ComponentProps) {
         de forma independente — falhas individuais não interrompem o lote.
       </p>
 
-      <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        <strong>Aviso de privacidade:</strong> os PDFs enviados são processados
-        pela API da Anthropic (Claude) e armazenados em banco de dados na
-        Cloudflare. Não envie decisões em <em>segredo de justiça</em> ou outros
-        documentos sigilosos. CPF/CNPJ no nome do arquivo são removidos
-        automaticamente.
-      </div>
+      <PrivacyNotice />
 
       <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -175,7 +176,7 @@ export default function UploadLote(_: Route.ComponentProps) {
               className="mt-2 block w-full cursor-pointer rounded-md border border-slate-300 bg-slate-50 p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Máx {fmtBytes(MAX_PDF_BYTES)} por arquivo. Sem limite na
+              Máx {bytesToMB(MAX_PDF_BYTES)} por arquivo. Sem limite na
               quantidade — só rate limits da Anthropic.
             </p>
           </div>
@@ -275,7 +276,7 @@ export default function UploadLote(_: Route.ComponentProps) {
                     {it.file.name}
                   </td>
                   <td className="px-4 py-3 text-slate-700">
-                    {fmtBytes(it.file.size)}
+                    {bytesToMB(it.file.size)}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={it.status} />

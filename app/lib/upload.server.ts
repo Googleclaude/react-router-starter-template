@@ -2,14 +2,17 @@ import { Buffer } from "node:buffer";
 import { extractDecisaoFromPdf } from "./claude.server";
 import { insertDecisao } from "./db.server";
 import { sanitizeFilename } from "./sanitize";
-import { MAX_PDF_BYTES, type ProcessResult } from "./upload.shared";
+import { bytesToMB, MAX_PDF_BYTES, type ProcessResult } from "./upload.shared";
 
-export { MAX_PDF_BYTES, type ProcessResult };
+export { bytesToMB, MAX_PDF_BYTES, type ProcessResult };
 
 // Header of a real PDF: "%PDF-" (ASCII 0x25 50 44 46 2D). The form's MIME
 // type is client-controlled and trivially spoofable — verifying the leading
 // bytes avoids wasting Anthropic tokens on disguised files.
-function hasPdfMagicBytes(buffer: ArrayBuffer): boolean {
+//
+// Exported so the unit test suite can exercise the rejection paths without
+// having to spin up the full action.
+export function hasPdfMagicBytes(buffer: ArrayBuffer): boolean {
   if (buffer.byteLength < 5) return false;
   const head = new Uint8Array(buffer, 0, 5);
   return (
@@ -60,7 +63,7 @@ export async function processUploadedPdf(
   if (file.size > MAX_PDF_BYTES) {
     return {
       ok: false,
-      error: `PDF muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). Máximo: ${(MAX_PDF_BYTES / 1024 / 1024).toFixed(0)} MB.`,
+      error: `PDF muito grande (${bytesToMB(file.size)}). Máximo: ${bytesToMB(MAX_PDF_BYTES, 0)}.`,
       pdf_filename: safeFilename,
     };
   }

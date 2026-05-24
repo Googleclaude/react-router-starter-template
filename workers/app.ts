@@ -4,6 +4,7 @@ import { createRequestHandler, type ServerBuild } from "react-router";
 // `npm run typecheck`. Wrangler bundles this file from the entry below.
 // @ts-ignore
 import * as build from "../build/server/index.js";
+import { checkBasicAuth, csrfCheck } from "./security";
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -25,18 +26,6 @@ function buildHandler(env: Env) {
 
 let handleRequest: ReturnType<typeof buildHandler> | undefined;
 
-// ---------------------------------------------------------------------------
-// Basic Auth
-
-function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
 function unauthorized(): Response {
   return withSecurityHeaders(
     new Response("401 Não autorizado", {
@@ -48,43 +37,6 @@ function unauthorized(): Response {
       },
     }),
   );
-}
-
-function checkBasicAuth(request: Request, expected: string): boolean {
-  const header = request.headers.get("Authorization");
-  if (!header || !header.startsWith("Basic ")) return false;
-  let decoded: string;
-  try {
-    decoded = atob(header.slice("Basic ".length).trim());
-  } catch {
-    return false;
-  }
-  const idx = decoded.indexOf(":");
-  if (idx === -1) return false;
-  const password = decoded.slice(idx + 1);
-  return safeEqual(password, expected);
-}
-
-// ---------------------------------------------------------------------------
-// CSRF (Sec-Fetch-Site)
-//
-// Basic Auth credentials are auto-attached by the browser on every request to
-// the protected origin — including cross-origin POSTs from a malicious page.
-// We can't use SameSite cookies (no cookies), so use `Sec-Fetch-Site` (sent
-// by every modern browser) to reject cross-site state-changing requests.
-//
-// Programmatic clients (curl, scripts) don't send Sec-Fetch-Site at all;
-// allow those through — the Basic Auth check above is their security
-// boundary. Browsers (the only CSRF vector that matters) DO send it, so
-// drive-by POSTs from foreign tabs are blocked.
-const STATE_CHANGING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-
-function csrfCheck(request: Request): boolean {
-  if (!STATE_CHANGING.has(request.method)) return true;
-  const site = request.headers.get("Sec-Fetch-Site");
-  // Block only when browser explicitly reports cross-site. Missing header,
-  // 'same-origin', 'same-site', and 'none' are all OK.
-  return site !== "cross-site";
 }
 
 function csrfBlocked(): Response {
@@ -131,9 +83,11 @@ const CSP = [
 // Security response headers (defense in depth)
 
 const SECURITY_HEADERS: Record<string, string> = {
-  // HTTPS only on the Cloudflare edge; once a browser sees this it pins HTTPS
-  // for the next year. Don't include subdomains — the workers.dev parent zone
-  // would inherit.
+  // Pin HTTPS for 1 year. Subdomains of `*.workers.dev` are treated as
+  // independent eTLD+1 entries (workers.dev is on the Public Suffix List),
+  // so includeSubDomains here brings no benefit on the default deploy
+  // domain — add it explicitly only when a custom domain controls real
+  // subdomains.
   "Strict-Transport-Security": "max-age=31536000",
   // Block MIME sniffing — browsers must use the Content-Type we set.
   "X-Content-Type-Options": "nosniff",

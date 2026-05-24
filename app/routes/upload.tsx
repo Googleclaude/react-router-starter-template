@@ -1,7 +1,8 @@
 import { Form, Link, redirect, useNavigation } from "react-router";
 import type { Route } from "./+types/upload";
+import { PrivacyNotice } from "~/components/privacy-notice";
 import { processUploadedPdf } from "~/lib/upload.server";
-import { MAX_PDF_BYTES } from "~/lib/upload.shared";
+import { bytesToMB, MAX_PDF_BYTES } from "~/lib/upload.shared";
 
 export const meta: Route.MetaFunction = () => [
   { title: "Nova decisão · Decisões STF" },
@@ -25,7 +26,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function Upload({ actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
-  const maxMb = (MAX_PDF_BYTES / 1024 / 1024).toFixed(0);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
@@ -46,12 +46,7 @@ export default function Upload({ actionData }: Route.ComponentProps) {
         .
       </p>
 
-      <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        <strong>Aviso de privacidade:</strong> o PDF enviado é processado pela
-        API da Anthropic (Claude) e armazenado em banco de dados na Cloudflare.
-        Não envie decisões em <em>segredo de justiça</em> ou outros documentos
-        sigilosos. CPF/CNPJ no nome do arquivo são removidos automaticamente.
-      </div>
+      <PrivacyNotice />
 
       <Form
         method="post"
@@ -75,7 +70,7 @@ export default function Upload({ actionData }: Route.ComponentProps) {
             className="mt-2 block w-full cursor-pointer rounded-md border border-slate-300 bg-slate-50 p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-slate-700"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Tamanho máximo: {maxMb}&nbsp;MB.
+            Tamanho máximo: {bytesToMB(MAX_PDF_BYTES, 0)}.
           </p>
         </div>
 
