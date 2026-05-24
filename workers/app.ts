@@ -99,6 +99,23 @@ function csrfBlocked(): Response {
 // ---------------------------------------------------------------------------
 // Security response headers (defense in depth)
 
+// CSP baseline. React Router hydrates via inline <script> blocks, so
+// `script-src` requires 'unsafe-inline' until we wire nonces through
+// entry.server.tsx. Style is inline as well (Tailwind classes are inlined
+// only at build time, but Google Fonts injects a <style> tag at runtime).
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const SECURITY_HEADERS: Record<string, string> = {
   // HTTPS only on the Cloudflare edge; once a browser sees this it pins HTTPS
   // for the next year. Don't include subdomains — the workers.dev parent zone
@@ -106,13 +123,21 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Strict-Transport-Security": "max-age=31536000",
   // Block MIME sniffing — browsers must use the Content-Type we set.
   "X-Content-Type-Options": "nosniff",
-  // No framing at all (clickjacking).
+  // No framing at all (clickjacking). frame-ancestors in CSP is the modern
+  // equivalent; keep XFO for older browsers.
   "X-Frame-Options": "DENY",
   // On cross-origin nav, only send the origin (not full URL) as referrer.
   "Referrer-Policy": "strict-origin-when-cross-origin",
   // Drop powerful features we don't need.
   "Permissions-Policy":
     "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
+  // Defense in depth — restrict cross-origin window access (Spectre).
+  "Cross-Origin-Opener-Policy": "same-origin",
+  // Cross-origin sites can't embed/read our responses as resources.
+  "Cross-Origin-Resource-Policy": "same-origin",
+  // Legacy Flash/PDF cross-domain policy — disabled.
+  "X-Permitted-Cross-Domain-Policies": "none",
+  "Content-Security-Policy": CSP,
 };
 
 function withSecurityHeaders(response: Response): Response {
