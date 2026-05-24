@@ -32,7 +32,11 @@ export default async function handleRequest(
     await body.allReady;
   }
 
-  responseHeaders.set("Content-Type", "text/html");
+  // Always include charset — pages contain Portuguese accents and
+  // X-Content-Type-Options: nosniff forces the browser to honor this header
+  // exactly. Without an explicit charset, accented characters can render
+  // garbled in some clients.
+  responseHeaders.set("Content-Type", "text/html; charset=utf-8");
   return new Response(body, {
     headers: responseHeaders,
     status: responseStatusCode,
