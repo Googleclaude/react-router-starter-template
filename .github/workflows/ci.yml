@@ -14,6 +14,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # gitleaks precisa do histórico completo para scan de todos os commits do diff
+          fetch-depth: 0
+
+      # SAST de segredos. Roda o binário diretamente em vez do action oficial
+      # (que exige licença paga em repos privados de organizações). O binário
+      # é MIT-licensed e sem restrição.
+      - id: gitleaks
+        continue-on-error: true
+        run: |
+          curl -sSfL \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar xz gitleaks
+          ./gitleaks detect --source . --no-banner --redact --verbose 2>&1 | tee gitleaks.log
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -22,13 +37,18 @@ jobs:
         continue-on-error: true
         run: npm install --no-audit --no-fund --legacy-peer-deps 2>&1 | tee install.log
 
+      - id: test
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm test 2>&1 | tee test.log
+
       - id: build
         if: steps.install.outcome == 'success'
         continue-on-error: true
         run: npm run build 2>&1 | tee build.log
 
       - name: Post failure log to PR
-        if: github.event_name == 'pull_request' && (steps.install.outcome == 'failure' || steps.build.outcome == 'failure')
+        if: github.event_name == 'pull_request' && (steps.gitleaks.outcome == 'failure' || steps.install.outcome == 'failure' || steps.test.outcome == 'failure' || steps.build.outcome == 'failure')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
@@ -36,11 +56,23 @@ jobs:
           {
             echo "### CI failure log (auto-posted)"
             echo
-            if [ "${{ steps.install.outcome }}" = "failure" ]; then
+            if [ "${{ steps.gitleaks.outcome }}" = "failure" ]; then
+              echo "**Step:** \`gitleaks\` — potencial segredo detectado"
+              echo
+              echo '```'
+              tail -n 60 gitleaks.log
+              echo '```'
+            elif [ "${{ steps.install.outcome }}" = "failure" ]; then
               echo "**Step:** \`npm install\`"
               echo
               echo '```'
               tail -n 100 install.log
+              echo '```'
+            elif [ "${{ steps.test.outcome }}" = "failure" ]; then
+              echo "**Step:** \`npm test\`"
+              echo
+              echo '```'
+              tail -n 100 test.log
               echo '```'
             else
               echo "**Step:** \`npm run build\`"
@@ -53,5 +85,5 @@ jobs:
           gh pr comment "$PR" --body-file comment.md --repo "$GITHUB_REPOSITORY"
 
       - name: Fail job if any prior step failed
-        if: steps.install.outcome == 'failure' || steps.build.outcome == 'failure'
+        if: steps.gitleaks.outcome == 'failure' || steps.install.outcome == 'failure' || steps.test.outcome == 'failure' || steps.build.outcome == 'failure'
         run: exit 1
