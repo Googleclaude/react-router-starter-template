@@ -14,6 +14,9 @@ export type Decisao = {
   pdf_filename: string | null;
   raw_text: string | null;
   created_at: string;
+  // Null = ativo. Timestamp = marcado como removido (soft delete).
+  // Listagens de produção (listDecisoes) filtram deleted_at IS NULL.
+  deleted_at: string | null;
 };
 
 export type DecisaoListItem = Pick<
@@ -30,6 +33,9 @@ export type DecisaoListItem = Pick<
   | "pdf_filename"
   | "created_at"
 >;
+
+// Lista da lixeira: mesmo enxoval da listagem normal + quando foi removido.
+export type DecisaoLixeiraItem = DecisaoListItem & { deleted_at: string };
 
 export type DecisaoExtracted = {
   numero_processo: string | null;

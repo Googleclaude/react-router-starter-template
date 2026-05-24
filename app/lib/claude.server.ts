@@ -87,7 +87,10 @@ export async function extractDecisaoFromPdf(
   apiKey: string,
   pdfBase64: string,
 ): Promise<DecisaoExtracted> {
-  const client = new Anthropic({ apiKey });
+  // maxRetries: 3 — o SDK já faz exponential backoff com jitter para 408,
+  // 409, 429 e erros 5xx (>= 500). Picos transientes da Anthropic (rate
+  // limit momentâneo, overloaded) param de derrubar uploads do lote.
+  const client = new Anthropic({ apiKey, maxRetries: 3 });
 
   const response = await client.messages.create({
     model: "claude-opus-4-7",
