@@ -18,6 +18,21 @@ Para cada decisão enviada, o sistema:
 - **Claude Opus 4.7** via SDK oficial `@anthropic-ai/sdk` (PDF + structured outputs)
 - Tailwind CSS v4
 
+## Tratamento de dados pessoais (LGPD)
+
+Esta aplicação trata dados pessoais (decisões judiciais públicas podem conter
+nomes, CPF/CNPJ e valores de partes). Conformidade documentada em:
+
+- [`PRIVACY.md`](./PRIVACY.md) — política de privacidade
+- [`ROPA.md`](./ROPA.md) — registro de operações (art. 37)
+- [`INCIDENT_RESPONSE.md`](./INCIDENT_RESPONSE.md) — playbook de incidentes (art. 48)
+
+**Controlador**: [A DEFINIR antes de operar]
+**Encarregado (DPO)**: [A DEFINIR] · e-mail: [a-definir]@exemplo.com.br
+**Base legal**: art. 7º IX (legítimo interesse — pesquisa jurídica em decisões públicas).
+**Transferência internacional**: PDFs vão para Anthropic (EUA); dados são armazenados
+em Cloudflare D1 (EUA por padrão). Detalhes em `PRIVACY.md` §7.
+
 ## Configuração inicial
 
 ```bash
@@ -35,6 +50,9 @@ npm run db:migrate:local
 cp .dev.vars.example .dev.vars   # edite e cole sua chave
 #    Produção (Cloudflare):
 wrangler secret put ANTHROPIC_API_KEY
+
+# 4) Configure a senha de acesso (Basic Auth)
+wrangler secret put APP_PASSWORD
 ```
 
 ## Desenvolvimento
@@ -60,35 +78,30 @@ ficar no `npm run preview`.
 npm run deploy
 ```
 
+## Qualidade
+
+```bash
+npm run lint     # Biome
+npm run format   # Biome --write
+npm test         # Vitest (testes das funções de segurança)
+npm run build    # react-router build
+```
+
 ## Rotas
 
 | Rota              | Função                                                        |
 | ----------------- | ------------------------------------------------------------- |
 | `/`               | Lista todas as decisões, ordenadas por data DESC.             |
 | `/upload`         | Formulário de upload do PDF.                                  |
+| `/upload-lote`    | Upload em lote (paralelo, orquestrado no browser).            |
 | `/decisao/:id`    | Detalhe: metadados, resumo, tese jurídica e ementa integral.  |
+| `/api/decisao`    | (Resource route) POST multipart, usado pelo upload em lote.   |
 
 ## Schema do banco (D1)
 
-`migrations/0001_init.sql` cria a tabela `decisoes`:
-
-| Coluna             | Tipo  | Descrição                                            |
-| ------------------ | ----- | ---------------------------------------------------- |
-| id                 | INT   | PK auto-incremento                                   |
-| numero_processo    | TEXT  | ex.: 1.234.567                                       |
-| classe_processual  | TEXT  | ex.: RE, ARE, ADI                                    |
-| turma              | TEXT  | Pleno, Primeira Turma, Segunda Turma, Monocrática    |
-| ministro_relator   | TEXT  | Nome do relator                                      |
-| data_decisao       | TEXT  | ISO-8601 (YYYY-MM-DD)                                |
-| data_publicacao    | TEXT  | ISO-8601                                             |
-| resultado          | TEXT  | Provido / Improvido / Parcialmente Provido / etc.    |
-| valor_nominal      | TEXT  | Valor monetário envolvido (texto livre)              |
-| ementa             | TEXT  | Transcrição literal                                  |
-| resumo             | TEXT  | Resumo gerado por IA                                 |
-| tese_juridica      | TEXT  | Tese para uso em peças processuais                   |
-| pdf_filename       | TEXT  | Nome do arquivo enviado                              |
-| raw_text           | TEXT  | Reservado para auditoria                             |
-| created_at         | TEXT  | datetime                                             |
+`migrations/0001_init.sql` cria a tabela `decisoes`. A coluna `raw_text` foi
+removida em `migrations/0002_drop_raw_text.sql` por minimização (LGPD art. 6º III):
+ela estava reservada para auditoria mas nunca foi preenchida pela aplicação.
 
 ## Como funciona a extração
 
@@ -99,7 +112,9 @@ frágil. Adaptive thinking está habilitado.
 
 ## Próximos passos sugeridos
 
+- Migrar Basic Auth para **Cloudflare Access (OIDC)** com per-user identity.
+- Audit log persistente (Fase 2 do roadmap) — habilita art. 37 plenamente.
+- Paginação na listagem.
 - Busca/filtro por ministro, turma, intervalo de datas.
-- Exportação CSV/JSON para uso em planilhas.
-- Lote: envio de múltiplos PDFs de uma vez.
-- Autenticação via Cloudflare Access.
+- Exportação CSV/JSON (atende art. 18 V — portabilidade).
+- Lote: envio de múltiplos PDFs — ✅ implementado em `/upload-lote`.
