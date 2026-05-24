@@ -6,4 +6,6 @@ export default [
   route("upload-lote", "routes/upload-lote.tsx"),
   route("api/decisao", "routes/api.decisao.tsx"),
   route("decisao/:id", "routes/decisao.$id.tsx"),
+  route("lixeira", "routes/lixeira.tsx"),
+  route("admin/export", "routes/admin.export.tsx"),
 ] satisfies RouteConfig;

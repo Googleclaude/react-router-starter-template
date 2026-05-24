@@ -97,6 +97,40 @@ function csrfBlocked(): Response {
 }
 
 // ---------------------------------------------------------------------------
+// Request size pre-check
+//
+// PDFs limit is 15 MB (enforced inside processUploadedPdf), but request bodies
+// pass through React Router's request.formData() multipart parser BEFORE
+// reaching that check. Without an early gate, a malicious client could send
+// Content-Length: 100 MB and force the parser to allocate / process the
+// whole body before we reject it.
+//
+// 16 MiB ceiling = 15 MiB PDF + margem para overhead de multipart (boundary,
+// headers de campo). Em GETs / requests pequenas o header normalmente nem
+// está presente, então o check é no-op.
+const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
+
+function tooLarge(): Response {
+  return withSecurityHeaders(
+    new Response(
+      `413 Payload muito grande. Máximo: ${(MAX_REQUEST_BYTES / 1024 / 1024).toFixed(0)} MB.`,
+      {
+        status: 413,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      },
+    ),
+  );
+}
+
+function oversizedBody(request: Request): boolean {
+  if (!STATE_CHANGING.has(request.method)) return false;
+  const cl = request.headers.get("Content-Length");
+  if (!cl) return false; // missing header — confiar no limite interno
+  const n = Number(cl);
+  return Number.isFinite(n) && n > MAX_REQUEST_BYTES;
+}
+
+// ---------------------------------------------------------------------------
 // Content Security Policy
 //
 // Locks down where the browser is allowed to load resources from. The app
@@ -158,6 +192,13 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-Permitted-Cross-Domain-Policies": "none",
   // Belt-and-suspenders against MIME-confusion XSS for downloaded files.
   "X-Download-Options": "noopen",
+  // Don't let authenticated content leak through shared caches / browser
+  // disk cache after the user logs out. 'private' blocks intermediate
+  // proxies; 'no-store' blocks the browser's disk cache (memory cache for
+  // the current session is fine). Upstream responses that set their own
+  // Cache-Control (static assets via the ASSETS binding) keep theirs — the
+  // `!has` check in withSecurityHeaders preserves them.
+  "Cache-Control": "private, no-store",
 };
 
 // MIME types whose Content-Type we want to ensure carries `charset=utf-8`.
@@ -227,6 +268,12 @@ export default {
     }
     if (!csrfCheck(request)) {
       return csrfBlocked();
+    }
+    // Reject oversized bodies BEFORE React Router's multipart parser sees
+    // them — cheap header check, prevents the parser from allocating buffers
+    // for payloads we'll reject anyway.
+    if (oversizedBody(request)) {
+      return tooLarge();
     }
     if (!handleRequest) handleRequest = buildHandler(env);
     const response = await handleRequest(request, {

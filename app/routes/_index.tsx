@@ -32,7 +32,20 @@ export default function Index({ loaderData }: Route.ComponentProps) {
               : `${decisoes.length} ${decisoes.length === 1 ? "decisão cadastrada" : "decisões cadastradas"}, ordenadas pela data da decisão (mais recentes primeiro).`}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="/admin/export"
+            className="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+            title="Baixa todas as decisões (incluindo removidas) em JSON"
+          >
+            Backup
+          </a>
+          <Link
+            to="/lixeira"
+            className="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+          >
+            Lixeira
+          </Link>
           <Link
             to="/upload"
             className="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-slate-50"
