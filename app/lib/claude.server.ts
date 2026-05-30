@@ -133,8 +133,14 @@ export async function extractDecisaoFromPdf(
   try {
     parsed = JSON.parse(textBlock.text) as DecisaoExtracted;
   } catch (err) {
+    // Não propagamos err.message: o texto do modelo pode conter PII (nomes,
+    // CPF, valores) e o SyntaxError do JSON.parse do Node embute um trecho
+    // do input que falhou na mensagem. Emitimos apenas err.name + tamanho da
+    // resposta como sinal operacional; o correlation ID em upload.server.ts
+    // amarra o erro à requisição.
+    const name = err instanceof Error ? err.name : "Error";
     throw new Error(
-      `Falha ao parsear JSON retornado pelo Claude: ${(err as Error).message}\nConteúdo: ${textBlock.text.slice(0, 500)}`,
+      `Falha ao parsear JSON retornado pelo Claude (${name}; ${textBlock.text.length} chars).`,
     );
   }
 
