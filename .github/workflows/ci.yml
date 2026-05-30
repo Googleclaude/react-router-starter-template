@@ -35,7 +35,7 @@ jobs:
 
       - id: install
         continue-on-error: true
-        run: npm install --no-audit --no-fund --legacy-peer-deps 2>&1 | tee install.log
+        run: npm ci --no-audit --no-fund --legacy-peer-deps 2>&1 | tee install.log
 
       - id: test
         if: steps.install.outcome == 'success'
