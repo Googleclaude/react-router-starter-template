@@ -7,6 +7,13 @@
     "worker-configuration.d.ts",
     "worker-env.d.ts"
   ],
+  "exclude": [
+    "node_modules",
+    "build",
+    ".react-router",
+    ".wrangler",
+    "vitest.config.ts"
+  ],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "types": ["@cloudflare/workers-types", "vite/client"],
