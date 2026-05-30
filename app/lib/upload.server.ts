@@ -26,25 +26,6 @@ function summarizeError(err: unknown): {
   return { errorMessage: String(err) };
 }
 
-// SDK errors can carry the full request/response payload (prompt content,
-// API headers, etc.) on inner properties. Serializing them naively into the
-// log puts that data in Cloudflare's log retention. Only emit the bits we
-// need to debug: name, short message, and a truncated stack.
-function summarizeError(err: unknown): {
-  errorName?: string;
-  errorMessage: string;
-  errorStack?: string;
-} {
-  if (err instanceof Error) {
-    return {
-      errorName: err.name,
-      errorMessage: err.message,
-      errorStack: err.stack?.slice(0, 1000),
-    };
-  }
-  return { errorMessage: String(err) };
-}
-
 /**
  * Receives a single PDF File, runs it through Claude for structured extraction,
  * persists the result in D1 and returns the new decision id (or a sanitized
