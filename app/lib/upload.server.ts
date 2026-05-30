@@ -1,24 +1,29 @@
 import { Buffer } from "node:buffer";
 import { extractDecisaoFromPdf } from "./claude.server";
 import { insertDecisao } from "./db.server";
+import { hasPdfMagicBytes } from "./pdf";
 import { sanitizeFilename } from "./sanitize";
 import { MAX_PDF_BYTES, type ProcessResult } from "./upload.shared";
 
 export { MAX_PDF_BYTES, type ProcessResult };
 
-// Header of a real PDF: "%PDF-" (ASCII 0x25 50 44 46 2D). The form's MIME
-// type is client-controlled and trivially spoofable — verifying the leading
-// bytes avoids wasting Anthropic tokens on disguised files.
-function hasPdfMagicBytes(buffer: ArrayBuffer): boolean {
-  if (buffer.byteLength < 5) return false;
-  const head = new Uint8Array(buffer, 0, 5);
-  return (
-    head[0] === 0x25 && // %
-    head[1] === 0x50 && // P
-    head[2] === 0x44 && // D
-    head[3] === 0x46 && // F
-    head[4] === 0x2d //   -
-  );
+// SDK errors can carry the full request/response payload (prompt content,
+// API headers, etc.) on inner properties. Serializing them naively into the
+// log puts that data in Cloudflare's log retention. Only emit the bits we
+// need to debug: name, short message, and a truncated stack.
+function summarizeError(err: unknown): {
+  errorName?: string;
+  errorMessage: string;
+  errorStack?: string;
+} {
+  if (err instanceof Error) {
+    return {
+      errorName: err.name,
+      errorMessage: err.message,
+      errorStack: err.stack?.slice(0, 1000),
+    };
+  }
+  return { errorMessage: String(err) };
 }
 
 // SDK errors can carry the full request/response payload (prompt content,
@@ -48,7 +53,8 @@ function summarizeError(err: unknown): {
  *
  * Security baked in:
  *   - filename sanitized (CPF/CNPJ stripping) before any logging or persist
- *   - PDF magic-byte verification before base64 + Anthropic call
+ *   - PDF magic-byte verification before base64 + Anthropic call (hasPdfMagicBytes
+ *     lives in ~/lib/pdf for unit-testability without server deps)
  *   - error messages sanitized, full detail logged server-side with UUID
  *   - error log strips inner Error properties (no SDK payloads in logs)
  */
@@ -56,7 +62,6 @@ export async function processUploadedPdf(
   env: Env,
   file: File,
 ): Promise<ProcessResult> {
-  // Sanitize before anything else: filename ends up in logs and in the DB.
   const safeFilename = sanitizeFilename(file.name);
 
   if (!env.ANTHROPIC_API_KEY) {
@@ -86,9 +91,6 @@ export async function processUploadedPdf(
   }
 
   try {
-    // Read once: validate magic bytes + reuse the buffer for base64. Avoids
-    // a second arrayBuffer() call which would error on the already-consumed
-    // blob in some Worker runtimes.
     const buffer = await file.arrayBuffer();
     if (!hasPdfMagicBytes(buffer)) {
       return {
