@@ -133,8 +133,12 @@ export async function extractDecisaoFromPdf(
   try {
     parsed = JSON.parse(textBlock.text) as DecisaoExtracted;
   } catch (err) {
+    // Não inclua o conteúdo retornado na mensagem de erro: o texto do modelo
+    // deriva do PDF e pode conter PII (nomes de partes, CPF, valores). A
+    // mensagem propaga até console.error em upload.server.ts. Mantemos apenas
+    // a causa do parse; o correlation ID liga o erro à requisição.
     throw new Error(
-      `Falha ao parsear JSON retornado pelo Claude: ${(err as Error).message}\nConteúdo: ${textBlock.text.slice(0, 500)}`,
+      `Falha ao parsear JSON retornado pelo Claude: ${(err as Error).message}`,
     );
   }
 
